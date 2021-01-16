@@ -20,23 +20,23 @@ type PrecipDay struct {
 }
 
 func TestEtl(t *testing.T) {
-	oraConfig := OracleConfig{
-		InstantClient: os.Getenv("INSTANTCLIENT"),
-		Dbhost:        os.Getenv("DBHOST"),
-		Dbname:        os.Getenv("DBNAME"),
-		Dbuser:        os.Getenv("DBUSER"),
-		Dbpass:        os.Getenv("DBPASS"),
+	oraConfig := SqlDbConfig{
+		ExternalLib: os.Getenv("INSTANTCLIENT"),
+		Dbhost:      os.Getenv("DBHOST"),
+		Dbname:      os.Getenv("DBNAME"),
+		Dbuser:      os.Getenv("DBUSER"),
+		Dbpass:      os.Getenv("DBPASS"),
 	}
-	sqliteConfig := SqliteConfig{
-		Dbpath: "/Users/rdcrlrsg/Working/crrel/crb/test/crb.db",
+	sqliteConfig := SqlDbConfig{
+		Path: "/Users/rdcrlrsg/Working/crrel/crb/test/crb.db",
 	}
 
-	source, err := NewOracleDb(oraConfig)
+	source, err := NewOracleSqlImpl(oraConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	dest, err := NewSqliteDb(sqliteConfig)
+	dest, err := NewSqliteSqlImpl(sqliteConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,7 +44,6 @@ func TestEtl(t *testing.T) {
 	options := TransferOptions{
 		CreateTable: true,
 		CommitSize:  100,
-		BatchSize:   100,
 	}
 
 	table := Table{

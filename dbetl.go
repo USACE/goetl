@@ -11,18 +11,22 @@ import (
 
 type TransferOptions struct {
 	CreateTable bool
-	CommitSize          int
-	BatchSize           int
+	CommitSize  int
 }
 
 type Source interface {
 	GetRows(table *Table) (*sqlx.Rows, error)
+	Close()
 }
 
 type Destination interface {
-	StartTransaction() (*sqlx.Tx, error)
+	StartTransaction() error
+	Rollback() error
+	Commit() error
 	TableExists(name string) (bool, error)
 	CreateTable(table *Table) error
+	CopyRow(table *Table, rownum int, row interface{})
+	Close()
 }
 
 type Table struct {
@@ -64,19 +68,19 @@ func (etl *ETL) copyData(table *Table) (err error) {
 	typeP := reflect.New(typ).Elem().Addr()
 	structRef := typeP.Interface()
 	var i int = 0
-	tx, err := etl.dest.StartTransaction()
+	err = etl.dest.StartTransaction()
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			txerr := tx.Rollback()
+			txerr := etl.dest.Rollback()
 			if txerr != nil {
 				log.Printf("Unable to rollback from transaction: %s", txerr)
 			}
 			err = r.(error)
 		} else {
-			txerr := tx.Commit()
+			txerr := etl.dest.Commit()
 			if txerr != nil {
 				log.Printf("Unable to commit transaction: %s", txerr)
 			}
@@ -89,27 +93,18 @@ func (etl *ETL) copyData(table *Table) (err error) {
 			return err
 		}
 		if i%etl.options.CommitSize == 0 {
-			if tx != nil {
-				err = tx.Commit()
-				if err != nil {
-					return err
-				}
-			}
-			tx, err = etl.dest.StartTransaction()
+			err = etl.dest.Commit()
 			if err != nil {
 				return err
 			}
-			etl.copyRow(table, tx, i, structRef)
+			err = etl.dest.StartTransaction()
+			if err != nil {
+				return err
+			}
+			etl.dest.CopyRow(table, i, structRef)
 		}
 	}
 	return nil
-}
-
-func (etl *ETL) copyRow(table *Table, tx *sqlx.Tx, rowNum int, row interface{}) {
-	_, err := tx.NamedExec(table.InsertSql, row)
-	if err != nil {
-		panic(err)
-	}
 }
 
 func createTableSql(tablename string, t reflect.Type) string {

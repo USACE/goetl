@@ -69,7 +69,7 @@ table := Table{
 etl := ETL{source, dest, options}
 
 err = etl.Transfer(&table)
-tif err != nil {
+if err != nil {
     log.Println(err)
 }
 ```
