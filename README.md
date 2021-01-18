@@ -21,67 +21,78 @@ To use the library,
      
 ```golang
 
-type PrecipDay struct {
-	SourceCode     string    `db:"SOURCE_CODE" desttype:"varchar(2)"`
-	AreaTypeCode   string    `db:"AREA_TYPE_CODE" desttype:"varchar(2)"`
-	AreaId         int       `db:"AREA_ID" desttype:"int"`
-	EndDate        time.Time `db:"END_DATE" desttype:"date"`
-	DayOfWaterYear int       `db:"DAY_OF_WATER_YEAR" desttype:"int"`
-	Value          float32   `db:"VALUE" desttype:"double"`
-	UnitCode       string    `db:"UNIT_CODE" desttype:"varchar(2)"`
-}
+func TestPostgres(t *testing.T) {
+	oraConfig := DbConfig{
+		ExternalLib: os.Getenv("INSTANTCLIENT"),
+		Dbhost:      os.Getenv("DBHOST"),
+		Dbname:      os.Getenv("DBNAME"),
+		Dbuser:      os.Getenv("DBUSER"),
+		Dbpass:      os.Getenv("DBPASS"),
+	}
 
-oraConfig := OracleConfig{
-    InstantClient: os.Getenv("INSTANTCLIENT"),
-    Dbhost:        os.Getenv("DBHOST"),
-    Dbname:        os.Getenv("DBNAME"),
-    Dbuser:        os.Getenv("DBUSER"),
-    Dbpass:        os.Getenv("DBPASS"),
-}
+	pgPort, err := strconv.Atoi(os.Getenv("PGDBPORT"))
+	if err != nil {
+		log.Fatal(err)
+	}
 
-sqliteConfig := SqliteConfig{
-    Dbpath: "/Users/rdcrlrsg/Working/crrel/crb/test/crb.db",
-}
+	pgConfig := PostgresConfig{
+		BatchSize: 100,
+		DbConfig: DbConfig{
+			Dbhost: os.Getenv("PGDBHOST"),
+			Dbname: os.Getenv("PGDBNAME"),
+			Dbuser: os.Getenv("PGDBUSER"),
+			Dbpass: os.Getenv("PGDBPASS"),
+			Dbport: pgPort,
+		},
+	}
 
-source, err := NewOracleDb(oraConfig)
-if err != nil {
-    log.Fatal(err)
-}
+	source, err := NewOracleSqlImpl(oraConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer source.Close()
 
-dest, err := NewSqliteDb(sqliteConfig)
-if err != nil {
-    log.Fatal(err)
-}
+	dest, err := NewPostgresDb(pgConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dest.Close()
 
-options := TransferOptions{
-    CreateTable: true,
-    CommitSize:  100,
-    BatchSize:   100,
-}
+	options := TransferOptions{
+		CreateTable: false,
+		CommitSize:  100,
+	}
 
-table := Table{
-    Name:      "precip_day",
-    SelectSql: "select * from (select * from precip_day_new) t1 where rownum<100",
-    InsertSql: "insert into precip_day values (:SOURCE_CODE,:AREA_TYPE_CODE,:AREA_ID,:END_DATE,:DAY_OF_WATER_YEAR,:VALUE,:UNIT_CODE)",
-    Fields:    PrecipDay{},
-}
+	table := Table{
+		Name:      "precip_day",
+		SelectSql: "select * from (select * from precip_day_new) t1 where rownum<100",
+		InsertSql: "insert into precip_day values (:SOURCE_CODE,:AREA_TYPE_CODE,:AREA_ID,:END_DATE,:DAY_OF_WATER_YEAR,:VALUE,:UNIT_CODE)",
+		Fields:    PrecipDay{},
+	}
 
-etl := ETL{source, dest, options}
+	etl := ETL{source, dest, options}
 
-err = etl.Transfer(&table)
-if err != nil {
-    log.Println(err)
+	err = etl.Transfer(&table)
+	if err != nil {
+		log.Println(err)
+	}
 }
 ```
 
-This initial version includes support for Oracle (db source only) and Sqlite.
+This initial version includes support for Oracle (db source only), Sqlite, and Postgres
 
 The library uses:
  - godror for the Oracle driver
  - go-sqlite3 for sqlite
- - pgx for postgres (not implemented)
+ - pgx for postgres
+ - scany for struct scanning
 
  TODO
-  - Generate select sql from struct
-  - Generate insert sql from struct
+  - improve named statement caching (use combination of driver and statement)
   - Allow user to override Read and Write methods with their own functions
+  - add option for case insenstitive named statement parameter matching
+  - generate sql update statements from struct
+  - remove nesting of DbConfig in the Postgresconfig
+  - unify batch and commit size
+  - enumerate and return errors from postgres batched statements
+  - review error handling
