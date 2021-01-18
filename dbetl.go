@@ -12,6 +12,16 @@ type TransferOptions struct {
 	CommitSize  int
 }
 
+type DbConfig struct {
+	Path        string
+	Dbuser      string
+	Dbpass      string
+	Dbname      string
+	Dbhost      string
+	Dbport      int
+	ExternalLib string
+}
+
 type Rows interface {
 	Next() bool
 	Close()
@@ -27,7 +37,7 @@ type Destination interface {
 	StartTransaction() error
 	Rollback() error
 	Commit() error
-	TableExists(name string) (bool, error)
+	TableExists(schema string, name string) (bool, error)
 	CreateTable(table *Table) error
 	CopyRow(table *Table, rownum int, row interface{})
 	Close()
@@ -35,6 +45,7 @@ type Destination interface {
 
 type Table struct {
 	Name      string
+	Schema    string //optional
 	SelectSql string
 	InsertSql string
 	Fields    interface{}
@@ -50,7 +61,7 @@ type ETL struct {
 //type GetRowsFunction func(db sqlx.DB, table Table)
 
 func (etl *ETL) Transfer(table *Table) error {
-	if exists, err := etl.dest.TableExists(table.Name); !exists && etl.options.CreateTable {
+	if exists, err := etl.dest.TableExists(table.Schema, table.Name); !exists && etl.options.CreateTable {
 		if err != nil {
 			return err
 		}

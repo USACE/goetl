@@ -1,6 +1,8 @@
 package dbetl
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"strings"
 )
@@ -21,7 +23,7 @@ func NewNamedStatement(templateFunction ParameterTemplateFunction, sql string, d
 	h := getHash(sql)
 	ns, ok := namedStatements[h]
 	if !ok {
-		ns := NamedStatement{}
+		ns = NamedStatement{}
 		ns.templateFunction = templateFunction
 		ns.parameterizeSql(sql, data)
 		namedStatements[h] = ns
@@ -80,4 +82,10 @@ func contains(list []rune, r rune) bool {
 		}
 	}
 	return false
+}
+
+func getHash(text string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(text))
+	return hex.EncodeToString(hasher.Sum(nil))
 }

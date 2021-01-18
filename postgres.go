@@ -2,10 +2,9 @@ package dbetl
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"log"
+	"reflect"
 
 	"github.com/georgysavva/scany/pgxscan"
 	"github.com/jackc/pgx/v4"
@@ -13,9 +12,11 @@ import (
 
 const defaultBatchSize = 100
 
+var pgTableExists string = `SELECT count(*) FROM information_schema.tables WHERE  table_schema = $1 AND table_name = $2`
+
 type PostgresConfig struct {
 	BatchSize int
-	SqlDbConfig
+	DbConfig
 }
 
 type Connx struct {
@@ -31,7 +32,7 @@ func (c *Connx) NamedExec(sql string, data interface{}) {
 		sql,
 		data,
 	)
-	c.batch.Queue(ns.ParamSql, ns.ParamArray(&data))
+	c.batch.Queue(ns.ParamSql, ns.ParamArray(data)...)
 }
 
 func (c *Connx) FlushBatch() {
@@ -50,7 +51,7 @@ func (pgr PgxRows) Next() bool {
 }
 
 func (pgr PgxRows) StructScan(ref interface{}) error {
-	return pgxscan.ScanOne(ref, pgr.rows)
+	return pgxscan.ScanRow(ref, pgr.rows)
 }
 
 func (pgr PgxRows) Close() {
@@ -109,12 +110,19 @@ func (pdb *PostgresDb) Commit() error {
 	return nil //@TODO need to figur eout how to scan batch for errors and return 1st errror
 }
 
+func (pdb *PostgresDb) TableExists(schema string, name string) (bool, error) {
+	var exists int
+	row := pdb.db.pgx.QueryRow(context.Background(), pgTableExists, schema, name)
+	err := row.Scan(&exists)
+	return exists > 0, err
+}
+
 func (pdb *PostgresDb) CopyRow(table *Table, rowNum int, row interface{}) {
 	pdb.db.NamedExec(table.InsertSql, row)
 }
 
-func getHash(text string) string {
-	hasher := md5.New()
-	hasher.Write([]byte(text))
-	return hex.EncodeToString(hasher.Sum(nil))
+func (pdb *PostgresDb) CreateTable(table *Table) error {
+	sql := createTableSql(table.Name, reflect.TypeOf(table.Fields))
+	_, err := pdb.db.pgx.Exec(context.Background(), sql)
+	return err
 }

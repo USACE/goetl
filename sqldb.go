@@ -10,17 +10,7 @@ import (
 	"github.com/georgysavva/scany/sqlscan"
 )
 
-type SqlDbConfig struct {
-	Path        string
-	Dbuser      string
-	Dbpass      string
-	Dbname      string
-	Dbhost      string
-	Dbport      int
-	ExternalLib string
-}
-
-func (c *SqlDbConfig) ToDsn() string {
+func (c *DbConfig) ToDsn() string {
 	return fmt.Sprintf(`user=%s password=%s host=%s port=%d dbname=%s`,
 		c.Dbuser, c.Dbpass, c.Dbhost, c.Dbport, c.Dbname)
 }
@@ -49,7 +39,7 @@ type SqlDbImpl struct {
 	TemplateFunction ParameterTemplateFunction
 }
 
-func NewOracleSqlImpl(config SqlDbConfig) (*SqlDb, error) {
+func NewOracleSqlImpl(config DbConfig) (*SqlDb, error) {
 	port := 1521
 	if config.Dbport != 0 {
 		port = config.Dbport
@@ -66,7 +56,7 @@ func NewOracleSqlImpl(config SqlDbConfig) (*SqlDb, error) {
 	return newSqlDb(impl)
 }
 
-func NewSqliteSqlImpl(config SqlDbConfig) (*SqlDb, error) {
+func NewSqliteSqlImpl(config DbConfig) (*SqlDb, error) {
 	impl := SqlDbImpl{
 		Driver:         "sqlite3",
 		Url:            config.Path,
@@ -116,7 +106,7 @@ func (sdb *SqlDb) StartTransaction() error {
 	return nil
 }
 
-func (sdb *SqlDb) TableExists(name string) (bool, error) {
+func (sdb *SqlDb) TableExists(schema string, name string) (bool, error) {
 	var exists int
 	row := sdb.db.QueryRowContext(context.Background(), sdb.dbimpl.TableExistsSql, name)
 	err := row.Scan(&exists)
