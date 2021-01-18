@@ -2,7 +2,7 @@ package dbetl
 
 import "reflect"
 
-func TagAndVals(tag string, data interface{}) ([]string, []interface{}) {
+func TagsAndVals(tag string, data interface{}) ([]string, []interface{}) {
 	val := reflect.ValueOf(data).Elem()
 	typ := reflect.TypeOf(data).Elem()
 	fieldNum := val.NumField()
@@ -15,6 +15,20 @@ func TagAndVals(tag string, data interface{}) ([]string, []interface{}) {
 		ia[i] = val.Field(i).Addr().Interface()
 	}
 	return tags, ia
+}
+
+func ValueMap(tag string, data interface{}) map[string]interface{} {
+	val := reflect.ValueOf(data).Elem()
+	typ := reflect.TypeOf(data).Elem()
+	fieldNum := val.NumField()
+	valmap := make(map[string]interface{})
+	for i := 0; i < fieldNum; i++ {
+		if tagval, ok := typ.Field(i).Tag.Lookup(tag); ok {
+			valmap[tagval] = val.Field(i).Addr().Interface()
+
+		}
+	}
+	return valmap
 }
 
 func TagAsPositionMap(tag string, data interface{}) map[string]int {

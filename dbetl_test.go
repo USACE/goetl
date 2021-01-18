@@ -7,6 +7,7 @@ import (
 	"time"
 
 	_ "github.com/godror/godror"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type PrecipDay struct {
@@ -35,11 +36,13 @@ func TestEtl(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer source.Close()
 
 	dest, err := NewSqliteSqlImpl(sqliteConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer dest.Close()
 
 	options := TransferOptions{
 		CreateTable: true,

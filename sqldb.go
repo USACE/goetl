@@ -1,13 +1,13 @@
 package dbetl
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"reflect"
 
-	_ "github.com/godror/godror"
-	"github.com/jmoiron/sqlx"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/georgysavva/scany/sqlscan"
 )
 
 type SqlDbConfig struct {
@@ -25,18 +25,43 @@ func (c *SqlDbConfig) ToDsn() string {
 		c.Dbuser, c.Dbpass, c.Dbhost, c.Dbport, c.Dbname)
 }
 
+//@TODO verify that the Next method is returning a reference from the Rows interface
+type SqldbRows struct {
+	rows *sql.Rows
+}
+
+func (sr SqldbRows) Next() bool {
+	return sr.rows.Next()
+}
+
+func (sr SqldbRows) StructScan(ref interface{}) error {
+	return sqlscan.ScanRow(ref, sr.rows)
+}
+
+func (sr SqldbRows) Close() {
+	sr.rows.Close()
+}
+
 type SqlDbImpl struct {
-	Driver         string
-	Url            string
-	TableExistsSql string
+	Driver           string
+	Url              string
+	TableExistsSql   string
+	TemplateFunction ParameterTemplateFunction
 }
 
 func NewOracleSqlImpl(config SqlDbConfig) (*SqlDb, error) {
+	port := 1521
+	if config.Dbport != 0 {
+		port = config.Dbport
+	}
 	impl := SqlDbImpl{
 		Driver: "godror",
 		Url: fmt.Sprintf(`user="%s" password="%s" connectString="%s:%d/%s" libDir="%s"`,
-			config.Dbuser, config.Dbpass, config.Dbhost, config.Dbport, config.Dbname, config.ExternalLib),
+			config.Dbuser, config.Dbpass, config.Dbhost, port, config.Dbname, config.ExternalLib),
 		TableExistsSql: `select count(*) from user_tables where table_name=$1`,
+		TemplateFunction: func(field string, i int) string {
+			return fmt.Sprintf(":%s", field)
+		},
 	}
 	return newSqlDb(impl)
 }
@@ -46,18 +71,21 @@ func NewSqliteSqlImpl(config SqlDbConfig) (*SqlDb, error) {
 		Driver:         "sqlite3",
 		Url:            config.Path,
 		TableExistsSql: `SELECT count(*) FROM sqlite_master WHERE type='table' AND name=$1`,
+		TemplateFunction: func(field string, i int) string {
+			return fmt.Sprintf("$%d", i)
+		},
 	}
 	return newSqlDb(impl)
 }
 
 type SqlDb struct {
 	dbimpl SqlDbImpl
-	db     *sqlx.DB
-	tx     *sqlx.Tx
+	db     *sql.DB
+	tx     *sql.Tx
 }
 
 func newSqlDb(dbimpl SqlDbImpl) (*SqlDb, error) {
-	db, err := sqlx.Open(dbimpl.Driver, dbimpl.Url)
+	db, err := sql.Open(dbimpl.Driver, dbimpl.Url)
 	if err != nil {
 		return nil, err
 	}
@@ -65,18 +93,22 @@ func newSqlDb(dbimpl SqlDbImpl) (*SqlDb, error) {
 }
 
 func (sdb *SqlDb) CopyRow(table *Table, rowNum int, row interface{}) {
-	_, err := sdb.tx.NamedExec(table.InsertSql, row)
+	ns := NewNamedStatement(sdb.dbimpl.TemplateFunction, table.InsertSql, row)
+	params := ns.ParamArray(row)
+	_, err := sdb.tx.Exec(ns.ParamSql, params...)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func (sdb *SqlDb) GetRows(table *Table) (*sqlx.Rows, error) {
-	return sdb.db.Queryx(table.SelectSql)
+func (sdb *SqlDb) GetRows(table *Table) (Rows, error) {
+	rows, err := sdb.db.Query(table.SelectSql)
+	return SqldbRows{rows}, err
+
 }
 
 func (sdb *SqlDb) StartTransaction() error {
-	tx, err := sdb.db.Beginx()
+	tx, err := sdb.db.Begin()
 	if err != nil {
 		return err
 	}
@@ -86,7 +118,8 @@ func (sdb *SqlDb) StartTransaction() error {
 
 func (sdb *SqlDb) TableExists(name string) (bool, error) {
 	var exists int
-	err := sdb.db.Get(&exists, sdb.dbimpl.TableExistsSql, name)
+	row := sdb.db.QueryRowContext(context.Background(), sdb.dbimpl.TableExistsSql, name)
+	err := row.Scan(&exists)
 	return exists > 0, err
 }
 

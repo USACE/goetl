@@ -5,8 +5,6 @@ import (
 	"log"
 	"reflect"
 	"strings"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type TransferOptions struct {
@@ -14,8 +12,14 @@ type TransferOptions struct {
 	CommitSize  int
 }
 
+type Rows interface {
+	Next() bool
+	Close()
+	StructScan(ref interface{}) error
+}
+
 type Source interface {
-	GetRows(table *Table) (*sqlx.Rows, error)
+	GetRows(table *Table) (Rows, error)
 	Close()
 }
 
@@ -64,6 +68,7 @@ func (etl *ETL) copyData(table *Table) (err error) {
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 	typ := reflect.TypeOf(table.Fields)
 	typeP := reflect.New(typ).Elem().Addr()
 	structRef := typeP.Interface()

@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"log"
 
+	"github.com/georgysavva/scany/pgxscan"
 	"github.com/jackc/pgx/v4"
 )
 
@@ -17,18 +19,42 @@ type PostgresConfig struct {
 }
 
 type Connx struct {
-	pgx             *pgx.Conn
-	namedStatements map[string]NamedStatement
-	batch           *pgx.Batch
+	pgx   *pgx.Conn
+	batch *pgx.Batch
 }
 
 func (c *Connx) NamedExec(sql string, data interface{}) {
-	h := getHash(sql)
-	ns, ok := c.namedStatements[h]
-	if !ok {
-		ns = NewNamedStatement(sql, &data)
-	}
+	ns := NewNamedStatement(
+		func(field string, i int) string {
+			return fmt.Sprintf("$%d", i)
+		},
+		sql,
+		data,
+	)
 	c.batch.Queue(ns.ParamSql, ns.ParamArray(&data))
+}
+
+func (c *Connx) FlushBatch() {
+	br := c.pgx.SendBatch(context.Background(), c.batch)
+	defer br.Close()
+	c.batch = &pgx.Batch{}
+}
+
+type PgxRows struct {
+	rows  pgx.Rows
+	table *Table
+}
+
+func (pgr PgxRows) Next() bool {
+	return pgr.rows.Next()
+}
+
+func (pgr PgxRows) StructScan(ref interface{}) error {
+	return pgxscan.ScanOne(ref, pgr.rows)
+}
+
+func (pgr PgxRows) Close() {
+	pgr.rows.Close()
 }
 
 type PostgresDb struct {
@@ -56,7 +82,36 @@ func NewPostgresDb(c PostgresConfig) (*PostgresDb, error) {
 	return &pg, nil
 }
 
-//func (pdb *PostgresDb) GetRows(table *Table) ()
+func (pdb *PostgresDb) GetRows(table *Table) (Rows, error) {
+	rows, err := pdb.db.pgx.Query(context.Background(), table.SelectSql)
+	return PgxRows{rows, table}, err
+}
+
+func (pdb *PostgresDb) Close() {
+	err := pdb.db.pgx.Close(context.Background())
+	if err != nil {
+		log.Printf("Unable to close connection: %s\n", err)
+	}
+}
+
+func (pdb *PostgresDb) StartTransaction() error {
+	pdb.db.batch = &pgx.Batch{}
+	return nil
+}
+
+func (pdb *PostgresDb) Rollback() error {
+	pdb.db.batch = &pgx.Batch{} //using implicit batch transactions.  Just reset the batch
+	return nil
+}
+
+func (pdb *PostgresDb) Commit() error {
+	pdb.db.FlushBatch()
+	return nil //@TODO need to figur eout how to scan batch for errors and return 1st errror
+}
+
+func (pdb *PostgresDb) CopyRow(table *Table, rowNum int, row interface{}) {
+	pdb.db.NamedExec(table.InsertSql, row)
+}
 
 func getHash(text string) string {
 	hasher := md5.New()

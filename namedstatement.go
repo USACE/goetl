@@ -5,16 +5,27 @@ import (
 	"strings"
 )
 
+type ParameterTemplateFunction func(field string, i int) string
+
+var namedStatements map[string]NamedStatement = make(map[string]NamedStatement) //cached named statements.
+
 type NamedStatement struct {
-	dbfields map[string]int
-	namedSql string
-	ParamSql string
-	paramMap []string
+	templateFunction ParameterTemplateFunction
+	dbfields         map[string]int
+	namedSql         string
+	ParamSql         string
+	paramMap         []string
 }
 
-func NewNamedStatement(sql string, data interface{}) NamedStatement {
-	ns := NamedStatement{}
-	ns.parameterizeSql(sql, data)
+func NewNamedStatement(templateFunction ParameterTemplateFunction, sql string, data interface{}) NamedStatement {
+	h := getHash(sql)
+	ns, ok := namedStatements[h]
+	if !ok {
+		ns := NamedStatement{}
+		ns.templateFunction = templateFunction
+		ns.parameterizeSql(sql, data)
+		namedStatements[h] = ns
+	}
 	return ns
 }
 
@@ -40,8 +51,11 @@ func (ns *NamedStatement) parameterizeSql(sql string, data interface{}) {
 		if !fieldExtraction && c == ':' {
 			fieldExtraction = true
 		} else if fieldExtraction && (contains(d, c)) {
-			sqlbuilder.WriteString(fmt.Sprintf("$%d%c", i, c))
-			params = append(params, fieldBuilder.String())
+			//sqlbuilder.WriteString(fmt.Sprintf("$%d%c", i, c))
+			f := fieldBuilder.String()
+			sqlbuilder.WriteString(ns.templateFunction(f, i))
+			sqlbuilder.WriteRune(c)
+			params = append(params, f)
 			fieldBuilder.Reset()
 			fieldExtraction = false
 			i++
