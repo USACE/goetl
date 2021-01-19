@@ -1,6 +1,7 @@
 package dbetl
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -80,7 +81,7 @@ func (etl *ETL) copyData(table *Table) (err error) {
 		return err
 	}
 	defer rows.Close()
-	typ := reflect.TypeOf(table.Fields)
+	typ := reflect.TypeOf(table.Fields).Elem()
 	typeP := reflect.New(typ).Elem().Addr()
 	structRef := typeP.Interface()
 	var i int = 0
@@ -123,19 +124,53 @@ func (etl *ETL) copyData(table *Table) (err error) {
 	return nil
 }
 
-func createTableSql(tablename string, t reflect.Type) string {
+func CreateTableSql(tablename string, t reflect.Type) string {
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("create table %s (", tablename))
+	fieldnum := 0
 	for i := 0; i < t.NumField(); i++ {
 		if dbfield, ok := t.Field(i).Tag.Lookup("db"); ok {
 			if dbtype, ok := t.Field(i).Tag.Lookup("desttype"); ok {
-				if i > 0 {
+				if fieldnum > 0 {
 					builder.WriteString(",")
 				}
 				builder.WriteString(fmt.Sprintf("%s %s", dbfield, dbtype))
+				fieldnum++
 			}
 		}
 	}
 	builder.WriteString(")")
 	return builder.String()
 }
+
+func InsertSql(tablename string, t reflect.Type) (string, error) {
+	var fieldBuild strings.Builder
+	var valsBuild strings.Builder
+	fieldcount := 0
+	for i := 0; i < t.NumField(); i++ {
+		if dbfield, ok := t.Field(i).Tag.Lookup("db"); ok {
+			if fieldcount > 0 {
+				fieldBuild.WriteRune(',')
+				valsBuild.WriteRune(',')
+			}
+			if idtype, ok := t.Field(i).Tag.Lookup("id"); ok {
+				if idtype != "AUTOINCREMENT" {
+					if idsequence, ok := t.Field(i).Tag.Lookup("idsequence"); ok {
+						fieldBuild.WriteString(dbfield)
+						valsBuild.WriteString(idsequence)
+						fieldcount++
+					} else {
+						return "", errors.New("Invalid id.  Sequnce type must have an 'idsequence' tag")
+					}
+				}
+			} else {
+				fieldBuild.WriteString(dbfield)
+				valsBuild.WriteString(":" + dbfield)
+				fieldcount++
+			}
+		}
+	}
+	return fmt.Sprintf("insert into %s (%s) values (%s)", tablename, fieldBuild.String(), valsBuild.String()), nil
+}
+
+//id "identity|sequence" idsequence ""

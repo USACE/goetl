@@ -83,9 +83,12 @@ func newSqlDb(dbimpl SqlDbImpl) (*SqlDb, error) {
 }
 
 func (sdb *SqlDb) CopyRow(table *Table, rowNum int, row interface{}) {
-	ns := NewNamedStatement(sdb.dbimpl.TemplateFunction, table.InsertSql, row)
+	ns, err := NewNamedStatement(sdb.dbimpl.Driver, sdb.dbimpl.TemplateFunction, table)
+	if err != nil {
+		panic(err)
+	}
 	params := ns.ParamArray(row)
-	_, err := sdb.tx.Exec(ns.ParamSql, params...)
+	_, err = sdb.tx.Exec(ns.ParamSql, params...)
 	if err != nil {
 		panic(err)
 	}
@@ -114,7 +117,8 @@ func (sdb *SqlDb) TableExists(schema string, name string) (bool, error) {
 }
 
 func (sdb *SqlDb) CreateTable(table *Table) error {
-	sql := createTableSql(table.Name, reflect.TypeOf(table.Fields))
+	sql := CreateTableSql(table.Name, reflect.TypeOf(table.Fields).Elem())
+	fmt.Println(sql)
 	_, err := sdb.db.Exec(sql)
 	return err
 }

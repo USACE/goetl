@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -19,16 +20,23 @@ type NamedStatement struct {
 	paramMap         []string
 }
 
-func NewNamedStatement(templateFunction ParameterTemplateFunction, sql string, data interface{}) NamedStatement {
-	h := getHash(sql)
+func NewNamedStatement(driver string, templateFunction ParameterTemplateFunction, table *Table) (NamedStatement, error) {
+	h := getHash(driver + table.InsertSql)
 	ns, ok := namedStatements[h]
 	if !ok {
 		ns = NamedStatement{}
 		ns.templateFunction = templateFunction
-		ns.parameterizeSql(sql, data)
+		if table.InsertSql == "" {
+			sql, err := InsertSql(table.Name, reflect.TypeOf(table.Fields).Elem())
+			if err != nil {
+				return ns, err
+			}
+			table.InsertSql = sql
+		}
+		ns.parameterizeSql(table.InsertSql, table.Fields)
 		namedStatements[h] = ns
 	}
-	return ns
+	return ns, nil
 }
 
 func (ns *NamedStatement) ParamArray(data interface{}) []interface{} {
@@ -53,7 +61,6 @@ func (ns *NamedStatement) parameterizeSql(sql string, data interface{}) {
 		if !fieldExtraction && c == ':' {
 			fieldExtraction = true
 		} else if fieldExtraction && (contains(d, c)) {
-			//sqlbuilder.WriteString(fmt.Sprintf("$%d%c", i, c))
 			f := fieldBuilder.String()
 			sqlbuilder.WriteString(ns.templateFunction(f, i))
 			sqlbuilder.WriteRune(c)

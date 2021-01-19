@@ -21,6 +21,16 @@ To use the library,
      
 ```golang
 
+type PrecipDay struct {
+	SourceCode     string    `db:"SOURCE_CODE" desttype:"varchar(2)"`
+	AreaTypeCode   string    `db:"AREA_TYPE_CODE" desttype:"varchar(2)"`
+	AreaId         int       `db:"AREA_ID" desttype:"int"`
+	EndDate        time.Time `db:"END_DATE" desttype:"date"`
+	DayOfWaterYear int       `db:"DAY_OF_WATER_YEAR" desttype:"int"`
+	Value          float32   `db:"VALUE" desttype:"double precision"`
+	UnitCode       string    `db:"UNIT_CODE" desttype:"varchar(2)"`
+}
+
 func TestPostgres(t *testing.T) {
 	oraConfig := DbConfig{
 		ExternalLib: os.Getenv("INSTANTCLIENT"),
@@ -91,8 +101,11 @@ The library uses:
   - improve named statement caching (use combination of driver and statement)
   - Allow user to override Read and Write methods with their own functions
   - add option for case insenstitive named statement parameter matching
+!  - generate sql insert statements from struct
   - generate sql update statements from struct
   - remove nesting of DbConfig in the Postgresconfig
   - unify batch and commit size
   - enumerate and return errors from postgres batched statements
   - review error handling
+!  - progress reporting
+

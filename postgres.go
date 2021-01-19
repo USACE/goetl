@@ -24,14 +24,17 @@ type Connx struct {
 	batch *pgx.Batch
 }
 
-func (c *Connx) NamedExec(sql string, data interface{}) {
-	ns := NewNamedStatement(
+func (c *Connx) NamedExec(driver string, table *Table, data interface{}) {
+	ns, err := NewNamedStatement(
+		driver,
 		func(field string, i int) string {
 			return fmt.Sprintf("$%d", i)
 		},
-		sql,
-		data,
+		table,
 	)
+	if err != nil {
+		panic(err)
+	}
 	c.batch.Queue(ns.ParamSql, ns.ParamArray(data)...)
 }
 
@@ -118,11 +121,11 @@ func (pdb *PostgresDb) TableExists(schema string, name string) (bool, error) {
 }
 
 func (pdb *PostgresDb) CopyRow(table *Table, rowNum int, row interface{}) {
-	pdb.db.NamedExec(table.InsertSql, row)
+	pdb.db.NamedExec("pgx", table, row)
 }
 
 func (pdb *PostgresDb) CreateTable(table *Table) error {
-	sql := createTableSql(table.Name, reflect.TypeOf(table.Fields))
+	sql := CreateTableSql(table.Name, reflect.TypeOf(table.Fields))
 	_, err := pdb.db.pgx.Exec(context.Background(), sql)
 	return err
 }
