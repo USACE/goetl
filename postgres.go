@@ -1,4 +1,4 @@
-package dbetl
+package goetl
 
 import (
 	"context"

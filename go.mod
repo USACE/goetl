@@ -1,4 +1,4 @@
-module github.com/usace/dbetl
+module github.com/usace/goetl
 
 go 1.15
 

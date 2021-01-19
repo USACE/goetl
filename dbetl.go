@@ -1,4 +1,4 @@
-package dbetl
+package goetl
 
 import (
 	"errors"
@@ -160,7 +160,7 @@ func InsertSql(tablename string, t reflect.Type) (string, error) {
 						valsBuild.WriteString(idsequence)
 						fieldcount++
 					} else {
-						return "", errors.New("Invalid id.  Sequnce type must have an 'idsequence' tag")
+						return "", errors.New("Invalid id.  Sequence type must have an 'idsequence' tag")
 					}
 				}
 			} else {
