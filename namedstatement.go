@@ -21,18 +21,19 @@ type NamedStatement struct {
 }
 
 func NewNamedStatement(driver string, templateFunction ParameterTemplateFunction, table *Table) (NamedStatement, error) {
+	if table.InsertSql == "" {
+		sql, err := InsertSql(table.Name, reflect.TypeOf(table.Fields).Elem())
+		if err != nil {
+			return NamedStatement{}, err
+		}
+		table.InsertSql = sql
+	}
+
 	h := getHash(driver + table.InsertSql)
 	ns, ok := namedStatements[h]
 	if !ok {
 		ns = NamedStatement{}
 		ns.templateFunction = templateFunction
-		if table.InsertSql == "" {
-			sql, err := InsertSql(table.Name, reflect.TypeOf(table.Fields).Elem())
-			if err != nil {
-				return ns, err
-			}
-			table.InsertSql = sql
-		}
 		ns.parameterizeSql(table.InsertSql, table.Fields)
 		namedStatements[h] = ns
 	}

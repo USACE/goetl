@@ -111,16 +111,16 @@ func (etl *ETL) copyData(table *Table) (err error) {
 	for rows.Next() {
 		err = rows.StructScan(structRef)
 		if err != nil {
-			return err
+			panic(err)
 		}
 		if i%etl.options.CommitSize == 0 {
 			err = etl.dest.Commit()
 			if err != nil {
-				return err
+				panic(err)
 			}
 			err = etl.dest.StartTransaction()
 			if err != nil {
-				return err
+				panic(err)
 			}
 			etl.dest.CopyRow(table, i, structRef)
 		}
