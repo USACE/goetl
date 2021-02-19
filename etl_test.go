@@ -89,15 +89,25 @@ func TestPostgres(t *testing.T) {
 		log.Fatal(err)
 	}
 
-	pgConfig := PostgresConfig{
-		BatchSize: 100,
-		DbConfig: DbConfig{
-			Dbhost: os.Getenv("PGDBHOST"),
-			Dbname: os.Getenv("PGDBNAME"),
-			Dbuser: os.Getenv("PGDBUSER"),
-			Dbpass: os.Getenv("PGDBPASS"),
-			Dbport: pgPort,
-		},
+	/*
+		pgConfig := PostgresConfig{
+			BatchSize: 100,
+			DbConfig: DbConfig{
+				Dbhost: os.Getenv("PGDBHOST"),
+				Dbname: os.Getenv("PGDBNAME"),
+				Dbuser: os.Getenv("PGDBUSER"),
+				Dbpass: os.Getenv("PGDBPASS"),
+				Dbport: pgPort,
+			},
+		}
+	*/
+
+	pgConfig := DbConfig{
+		Dbhost: os.Getenv("PGDBHOST"),
+		Dbname: os.Getenv("PGDBNAME"),
+		Dbuser: os.Getenv("PGDBUSER"),
+		Dbpass: os.Getenv("PGDBPASS"),
+		Dbport: pgPort,
 	}
 
 	source, err := NewOracleSqlImpl(oraConfig)

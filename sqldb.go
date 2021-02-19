@@ -56,6 +56,21 @@ func NewOracleSqlImpl(config DbConfig) (*SqlDb, error) {
 	return newSqlDb(impl)
 }
 
+func NewPostgresSqlImpl(config DbConfig) (*SqlDb, error) {
+	if config.Dbport == 0 {
+		config.Dbport = 5432
+	}
+	impl := SqlDbImpl{
+		Driver:         "pgx",
+		Url:            config.ToDsn(),
+		TableExistsSql: pgTableExists,
+		TemplateFunction: func(field string, i int) string {
+			return fmt.Sprintf("$%d", i)
+		},
+	}
+	return newSqlDb(impl)
+}
+
 func NewSqliteSqlImpl(config DbConfig) (*SqlDb, error) {
 	impl := SqlDbImpl{
 		Driver:         "sqlite3",
@@ -111,14 +126,18 @@ func (sdb *SqlDb) StartTransaction() error {
 
 func (sdb *SqlDb) TableExists(schema string, name string) (bool, error) {
 	var exists int
-	row := sdb.db.QueryRowContext(context.Background(), sdb.dbimpl.TableExistsSql, name)
+	var row *sql.Row
+	if sdb.dbimpl.Driver == "pgx" {
+		row = sdb.db.QueryRowContext(context.Background(), sdb.dbimpl.TableExistsSql, schema, name)
+	} else {
+		row = sdb.db.QueryRowContext(context.Background(), sdb.dbimpl.TableExistsSql, name)
+	}
 	err := row.Scan(&exists)
 	return exists > 0, err
 }
 
 func (sdb *SqlDb) CreateTable(table *Table) error {
 	sql := CreateTableSql(table.Name, reflect.TypeOf(table.Fields).Elem())
-	fmt.Println(sql)
 	_, err := sdb.db.Exec(sql)
 	return err
 }

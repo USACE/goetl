@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const defaultCommitSize = 100
+
 type TransferOptions struct {
 	CreateTable bool
 	CommitSize  int
@@ -59,6 +61,9 @@ type ETL struct {
 }
 
 func NewEtl(source Source, dest Destination, options TransferOptions) ETL {
+	if options.CommitSize == 0 {
+		options.CommitSize = defaultCommitSize //set a default commit size if the user did not specify one
+	}
 	return ETL{source, dest, options}
 }
 
@@ -109,6 +114,7 @@ func (etl *ETL) copyData(table *Table) (err error) {
 		}
 	}()
 	for rows.Next() {
+		i++
 		err = rows.StructScan(structRef)
 		if err != nil {
 			panic(err)
@@ -122,8 +128,8 @@ func (etl *ETL) copyData(table *Table) (err error) {
 			if err != nil {
 				panic(err)
 			}
-			etl.dest.CopyRow(table, i, structRef)
 		}
+		etl.dest.CopyRow(table, i, structRef)
 	}
 	return nil
 }

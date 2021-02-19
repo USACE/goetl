@@ -44,7 +44,8 @@ func (ns *NamedStatement) ParamArray(data interface{}) []interface{} {
 	vals := ValsAsInterfaceArray(data)
 	var params []interface{}
 	for _, v := range ns.paramMap {
-		params = append(params, vals[ns.dbfields[v]])
+		val := vals[ns.dbfields[v]]
+		params = append(params, val)
 	}
 	return params
 }

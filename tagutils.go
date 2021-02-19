@@ -1,6 +1,10 @@
 package goetl
 
-import "reflect"
+import (
+	"reflect"
+
+	"github.com/ulule/deepcopier"
+)
 
 func TagsAndVals(tag string, data interface{}) ([]string, []interface{}) {
 	val := reflect.ValueOf(data).Elem()
@@ -64,4 +68,11 @@ func ValsAsInterfaceArray(data interface{}) []interface{} {
 		ia[i] = valField.Addr().Interface()
 	}
 	return ia
+}
+
+func copyElem(source interface{}) interface{} {
+	typ := reflect.TypeOf(source).Elem()
+	dest := reflect.New(typ).Interface()
+	deepcopier.Copy(source).To(dest)
+	return dest
 }

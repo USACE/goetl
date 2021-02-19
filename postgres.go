@@ -10,14 +10,16 @@ import (
 	"github.com/jackc/pgx/v4"
 )
 
-const defaultBatchSize = 100
+//const defaultBatchSize = 100
 
 var pgTableExists string = `SELECT count(*) FROM information_schema.tables WHERE  table_schema = $1 AND table_name = $2`
 
+/*
 type PostgresConfig struct {
-	BatchSize int
+	//	BatchSize int
 	DbConfig
 }
+*/
 
 type Connx struct {
 	pgx   *pgx.Conn
@@ -35,7 +37,9 @@ func (c *Connx) NamedExec(driver string, table *Table, data interface{}) {
 	if err != nil {
 		panic(err)
 	}
-	c.batch.Queue(ns.ParamSql, ns.ParamArray(data)...)
+	copy := copyElem(data)
+	params := ns.ParamArray(copy)
+	c.batch.Queue(ns.ParamSql, params...)
 }
 
 func (c *Connx) FlushBatch() {
@@ -62,11 +66,10 @@ func (pgr PgxRows) Close() {
 }
 
 type PostgresDb struct {
-	db        *Connx
-	batchSize int
+	db *Connx
 }
 
-func NewPostgresDb(c PostgresConfig) (*PostgresDb, error) {
+func NewPostgresDb(c DbConfig) (*PostgresDb, error) {
 	conn, err := pgx.Connect(context.Background(), c.ToDsn())
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
@@ -77,11 +80,6 @@ func NewPostgresDb(c PostgresConfig) (*PostgresDb, error) {
 			pgx:   conn,
 			batch: &pgx.Batch{},
 		},
-		batchSize: defaultBatchSize,
-	}
-
-	if c.BatchSize > 0 {
-		pg.batchSize = c.BatchSize
 	}
 	return &pg, nil
 }
@@ -110,7 +108,7 @@ func (pdb *PostgresDb) Rollback() error {
 
 func (pdb *PostgresDb) Commit() error {
 	pdb.db.FlushBatch()
-	return nil //@TODO need to figur eout how to scan batch for errors and return 1st errror
+	return nil //@TODO need to scan batch for errors and return 1st errror
 }
 
 func (pdb *PostgresDb) TableExists(schema string, name string) (bool, error) {
@@ -125,7 +123,7 @@ func (pdb *PostgresDb) CopyRow(table *Table, rowNum int, row interface{}) {
 }
 
 func (pdb *PostgresDb) CreateTable(table *Table) error {
-	sql := CreateTableSql(table.Name, reflect.TypeOf(table.Fields))
+	sql := CreateTableSql(table.Name, reflect.TypeOf(table.Fields).Elem())
 	_, err := pdb.db.pgx.Exec(context.Background(), sql)
 	return err
 }
