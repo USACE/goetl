@@ -33,10 +33,10 @@ func (sr SqldbRows) Close() {
 }
 
 type SqlDbImpl struct {
-	Driver           string
-	Url              string
-	TableExistsSql   string
-	TemplateFunction ParameterTemplateFunction
+	Driver                    string
+	Url                       string
+	TableExistsSql            string
+	BindParamTemplateFunction BindParamTemplateFunction
 }
 
 func NewOracleSqlImpl(config DbConfig) (*SqlDb, error) {
@@ -49,7 +49,7 @@ func NewOracleSqlImpl(config DbConfig) (*SqlDb, error) {
 		Url: fmt.Sprintf(`user="%s" password="%s" connectString="%s:%d/%s" libDir="%s"`,
 			config.Dbuser, config.Dbpass, config.Dbhost, port, config.Dbname, config.ExternalLib),
 		TableExistsSql: `select count(*) from user_tables where table_name=$1`,
-		TemplateFunction: func(field string, i int) string {
+		BindParamTemplateFunction: func(field string, i int) string {
 			return fmt.Sprintf(":%s", field)
 		},
 	}
@@ -64,7 +64,7 @@ func NewPostgresSqlImpl(config DbConfig) (*SqlDb, error) {
 		Driver:         "pgx",
 		Url:            config.ToDsn(),
 		TableExistsSql: pgTableExists,
-		TemplateFunction: func(field string, i int) string {
+		BindParamTemplateFunction: func(field string, i int) string {
 			return fmt.Sprintf("$%d", i)
 		},
 	}
@@ -76,7 +76,7 @@ func NewSqliteSqlImpl(config DbConfig) (*SqlDb, error) {
 		Driver:         "sqlite3",
 		Url:            config.Path,
 		TableExistsSql: `SELECT count(*) FROM sqlite_master WHERE type='table' AND name=$1`,
-		TemplateFunction: func(field string, i int) string {
+		BindParamTemplateFunction: func(field string, i int) string {
 			return fmt.Sprintf("$%d", i)
 		},
 	}
@@ -98,7 +98,7 @@ func newSqlDb(dbimpl SqlDbImpl) (*SqlDb, error) {
 }
 
 func (sdb *SqlDb) CopyRow(table *Table, rowNum int, row interface{}) {
-	ns, err := NewNamedStatement(sdb.dbimpl.Driver, sdb.dbimpl.TemplateFunction, table)
+	ns, err := NewNamedStatement(sdb.dbimpl.Driver, sdb.dbimpl.BindParamTemplateFunction, table)
 	if err != nil {
 		panic(err)
 	}

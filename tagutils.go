@@ -64,8 +64,9 @@ func ValsAsInterfaceArray(data interface{}) []interface{} {
 	fieldNum := val.NumField()
 	ia := make([]interface{}, fieldNum)
 	for i := 0; i < fieldNum; i++ {
-		valField := val.Field(i)
-		ia[i] = valField.Addr().Interface()
+		//valField := val.Field(i)
+		//ia[i] = valField.Addr().Interface()
+		ia[i] = val.Field(i).Addr().Interface()
 	}
 	return ia
 }

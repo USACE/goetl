@@ -10,16 +10,11 @@ import (
 	"github.com/jackc/pgx/v4"
 )
 
-//const defaultBatchSize = 100
-
 var pgTableExists string = `SELECT count(*) FROM information_schema.tables WHERE  table_schema = $1 AND table_name = $2`
 
-/*
-type PostgresConfig struct {
-	//	BatchSize int
-	DbConfig
+var pgBindTemplateFunction = func(field string, i int) string {
+	return fmt.Sprintf("$%d", i)
 }
-*/
 
 type Connx struct {
 	pgx   *pgx.Conn

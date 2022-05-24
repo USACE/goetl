@@ -12,7 +12,7 @@ import (
 )
 
 type PrecipDay struct {
-	ID             int       `db:"id" id:"AUTOINCREMENT" desttype:"integer PRIMARY KEY AUTOINCREMENT"`
+	ID             int       `db:"id" dbid:"AUTOINCREMENT" desttype:"integer PRIMARY KEY AUTOINCREMENT"`
 	SourceCode     string    `db:"SOURCE_CODE" desttype:"varchar(2)"`
 	AreaTypeCode   string    `db:"AREA_TYPE_CODE" desttype:"varchar(2)"`
 	AreaId         int       `db:"AREA_ID" desttype:"integer"`

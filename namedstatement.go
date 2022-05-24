@@ -8,21 +8,19 @@ import (
 	"strings"
 )
 
-type ParameterTemplateFunction func(field string, i int) string
-
 var namedStatements map[string]NamedStatement = make(map[string]NamedStatement) //cached named statements.
 
 type NamedStatement struct {
-	templateFunction ParameterTemplateFunction
+	templateFunction BindParamTemplateFunction
 	dbfields         map[string]int
 	namedSql         string
 	ParamSql         string
 	paramMap         []string
 }
 
-func NewNamedStatement(driver string, templateFunction ParameterTemplateFunction, table *Table) (NamedStatement, error) {
+func NewNamedStatement(driver string, templateFunction BindParamTemplateFunction, table *Table) (NamedStatement, error) {
 	if table.InsertSql == "" {
-		sql, err := InsertSql(table.Name, reflect.TypeOf(table.Fields).Elem())
+		sql, err := NamedInsertSql(table.Name, reflect.TypeOf(table.Fields).Elem())
 		if err != nil {
 			return NamedStatement{}, err
 		}

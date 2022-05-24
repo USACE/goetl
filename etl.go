@@ -11,8 +11,9 @@ import (
 const defaultCommitSize = 100
 
 type TransferOptions struct {
-	CreateTable bool
-	CommitSize  int
+	CreateTable       bool
+	CommitSize        int
+	ReportingFunction func(i int64)
 }
 
 type DbConfig struct {
@@ -59,6 +60,8 @@ type ETL struct {
 	dest    Destination
 	options TransferOptions
 }
+
+type BindParamTemplateFunction func(field string, i int) string
 
 func NewEtl(source Source, dest Destination, options TransferOptions) ETL {
 	if options.CommitSize == 0 {
@@ -121,6 +124,9 @@ func (etl *ETL) copyData(table *Table) (err error) {
 		}
 		if i%etl.options.CommitSize == 0 {
 			err = etl.dest.Commit()
+			if etl.options.ReportingFunction != nil {
+				etl.options.ReportingFunction(int64(i))
+			}
 			if err != nil {
 				panic(err)
 			}
@@ -153,7 +159,8 @@ func CreateTableSql(tablename string, t reflect.Type) string {
 	return builder.String()
 }
 
-func InsertSql(tablename string, t reflect.Type) (string, error) {
+//@TODO should replace with more flexible structToInsert
+func NamedInsertSql(tablename string, t reflect.Type) (string, error) {
 	var fieldBuild strings.Builder
 	var valsBuild strings.Builder
 	fieldcount := 0
@@ -163,7 +170,7 @@ func InsertSql(tablename string, t reflect.Type) (string, error) {
 				fieldBuild.WriteRune(',')
 				valsBuild.WriteRune(',')
 			}
-			if idtype, ok := t.Field(i).Tag.Lookup("id"); ok {
+			if idtype, ok := t.Field(i).Tag.Lookup("dbid"); ok {
 				if idtype != "AUTOINCREMENT" {
 					if idsequence, ok := t.Field(i).Tag.Lookup("idsequence"); ok {
 						fieldBuild.WriteString(dbfield)
@@ -181,6 +188,54 @@ func InsertSql(tablename string, t reflect.Type) (string, error) {
 		}
 	}
 	return fmt.Sprintf("insert into %s (%s) values (%s)", tablename, fieldBuild.String(), valsBuild.String()), nil
+}
+
+func structToUpdate(tablename string, typ reflect.Type, bindTemplateFunction BindParamTemplateFunction) string {
+	var fieldsBuilder strings.Builder
+	fieldNum := typ.NumField()
+	field := 0
+	for i := 0; i < fieldNum; i++ {
+		if tagval, ok := typ.Field(i).Tag.Lookup("db"); ok {
+			if field > 0 {
+				fieldsBuilder.WriteRune(',')
+			}
+			fieldsBuilder.WriteString(fmt.Sprintf("set %s = %s", tagval, bindTemplateFunction(tagval, field)))
+			field++
+		}
+	}
+	return fmt.Sprintf("update %s %s", tablename, fieldsBuilder.String())
+}
+
+func structToInsert(tablename string, typ reflect.Type, bindTemplateFunction BindParamTemplateFunction) (string, error) {
+	var fieldBuilder strings.Builder
+	var bindBuilder strings.Builder
+	fieldNum := typ.NumField()
+	fieldcount := 0
+	for i := 0; i < fieldNum; i++ {
+		if dbfield, ok := typ.Field(i).Tag.Lookup("db"); ok {
+			if fieldcount > 0 {
+				fieldBuilder.WriteRune(',')
+				bindBuilder.WriteRune(',')
+			}
+			if idtype, ok := typ.Field(i).Tag.Lookup("dbid"); ok {
+				if idtype != "AUTOINCREMENT" {
+					if idsequence, ok := typ.Field(i).Tag.Lookup("idsequence"); ok {
+						fieldBuilder.WriteString(dbfield)
+						bindBuilder.WriteString(idsequence)
+						fieldcount++
+					} else {
+						return "", errors.New("Invalid id.  Sequence type must have an 'idsequence' tag")
+					}
+				}
+			} else {
+				fieldBuilder.WriteString(dbfield)
+				bindBuilder.WriteString(bindTemplateFunction(dbfield, fieldcount))
+				fieldcount++
+			}
+
+		}
+	}
+	return fmt.Sprintf("insert into %s (%s) values (%s)", tablename, fieldBuilder.String(), bindBuilder.String()), nil
 }
 
 //id "identity|sequence" idsequence ""
